@@ -1,79 +1,79 @@
 import streamlit as st
 import pandas as pd
 
-# Ustawienia średnic i typów
+# Konfiguracja
 SREDNICE = [6, 8, 10, 12, 14, 16, 20, 25, 28, 32]
 TYPY = ["proste", "gięte", "3D"]
 
-st.set_page_config(page_title="Sumator Zbrojenia Wrocław", layout="wide")
-st.title("🏗️ Szybki Sumator Stallist (Wagi kg)")
+st.set_page_config(page_title="Zbrojenia Wrocław", layout="wide")
+st.title("🏗️ System Sumowania Wag Stallist")
 
-# Inicjalizacja baz danych w pamięci sesji
+# Inicjalizacja danych w pamięci
 if 'macierze' not in st.session_state:
     st.session_state.macierze = {i: pd.DataFrame(0.0, index=TYPY, columns=SREDNICE) for i in range(1, 7)}
 
-# FUNKCJA CALLBACK - wykonuje się po naciśnięciu ENTER
-def przetworz_enter(nr_listy):
-    klucz_wagi = f"waga_v_{nr_listy}"
-    waga_do_dodania = st.session_state[klucz_wagi]
+# FUNKCJA CALLBACK - Wykonuje się natychmiast po naciśnięciu ENTER
+def dodaj_wage_po_enterze(nr):
+    waga_key = f"input_waga_{nr}"
+    waga_wartosc = st.session_state[waga_key]
     
-    if waga_do_dodania > 0:
-        sr = st.session_state[f"sr_v_{nr_listy}"]
-        tp = st.session_state[f"tp_v_{nr_listy}"]
+    if waga_wartosc > 0:
+        wybrana_sr = st.session_state[f"sr_{nr}"]
+        wybrany_tp = st.session_state[f"tp_{nr}"]
         
-        # Dodanie wagi do odpowiedniej komórki
-        st.session_state.macierze[nr_listy].at[tp, sr] += round(waga_do_dodania, 2)
+        # Dodanie wagi do odpowiedniej komórki w tabeli
+        st.session_state.macierze[nr].at[wybrany_tp, wybrana_sr] += round(waga_wartosc, 2)
         
-        # Resetowanie pola wpisywania do zera
-        st.session_state[klucz_wagi] = 0.0
+        # Resetowanie pola wpisywania, aby było puste po Enterze
+        st.session_state[waga_key] = 0.0
 
-# WYŚWIETLANIE 6 SEKCJI
+# 1. GENEROWANIE 6 LIST
 for i in range(1, 7):
-    suma_listy = st.session_state.macierze[i].values.sum()
-    with st.expander(f"📋 STALLISTA NR {i} (Suma: {suma_listy:.2f} kg)", expanded=(i==1)):
+    aktualna_suma = st.session_state.macierze[i].values.sum()
+    with st.expander(f"📋 STALLISTA NR {i} | Suma: {aktualna_suma:.2f} kg", expanded=(i==1)):
         
-        # UI do wpisywania - brak kontenera FORM = brak przycisku
+        # Interfejs wprowadzania
         c1, c2, c3 = st.columns([1, 1, 2])
         with c1:
-            st.selectbox("Średnica [mm]", SREDNICE, key=f"sr_v_{i}")
+            st.selectbox("Średnica [mm]", SREDNICE, key=f"sr_{i}")
         with c2:
-            st.selectbox("Typ obróbki", TYPY, key=f"tp_v_{i}")
+            st.selectbox("Typ obróbki", TYPY, key=f"tp_{i}")
         with c3:
-            # on_change wywołuje funkcję natychmiast po Enterze
+            # Brak formularza = brak przycisku. on_change reaguje na ENTER.
             st.number_input("Wpisz wagę i naciśnij ENTER", 
                            min_value=0.0, step=0.01, format="%.2f", 
-                           key=f"waga_v_{i}", 
-                           on_change=przetworz_enter, args=(i,))
+                           key=f"input_waga_{i}", 
+                           on_change=dodaj_wage_po_enterze, args=(i,))
 
-        # EDYTOWALNA TABELA - tutaj klikasz, żeby poprawić błąd
-        st.write("Podgląd tabeli (kliknij komórkę, aby edytować):")
+        # EDYTOWALNA TABELA - tutaj klikasz w liczbę, żeby ją poprawić
+        st.write("Podgląd tabeli (edytuj klikając w komórkę):")
         st.session_state.macierze[i] = st.data_editor(
             st.session_state.macierze[i],
-            key=f"tabela_v_{i}",
+            key=f"editor_{i}",
             use_container_width=True
         )
         
-        if st.button(f"Wyczyść listę {i}", key=f"clear_v_{i}"):
+        if st.button(f"🗑️ Wyczyść listę {i}", key=f"clr_{i}"):
             st.session_state.macierze[i] = pd.DataFrame(0.0, index=TYPY, columns=SREDNICE)
             st.rerun()
 
-# --- PODSUMOWANIE ZBIORCZE NA DOLE STRONY ---
+# 2. PODSUMOWANIE ZAKRESOWE (DOKŁADNIE JAK W TWOIM EXCELU)
 st.divider()
-st.header("📊 ZBIORCZE PODSUMOWANIE (Wszystkie Listy)")
+st.header("📊 ZBIORCZE PODSUMOWANIE ZAKRESÓW")
 
-# Sumowanie wszystkich 6 macierzy
+# Sumowanie wszystkich 6 list
 df_total = pd.concat(st.session_state.macierze.values()).groupby(level=0).sum()
 
-# Grupowanie zakresowe zgodnie z Twoim Excelem
-podsumowanie_zakresy = pd.DataFrame(index=TYPY)
-podsumowanie_zakresy["#6 - #8"] = df_total[[6, 8]].sum(axis=1)
-podsumowanie_zakresy["#10 - #12"] = df_total[[10, 12]].sum(axis=1)
-podsumowanie_zakresy["#14 - #32"] = df_total[[14, 16, 20, 25, 28, 32]].sum(axis=1)
-podsumowanie_zakresy["SUMA [kg]"] = podsumowanie_zakresy.sum(axis=1)
+# Zakresy średnic
+summary = pd.DataFrame(index=TYPY)
+summary["#6 - #8"] = df_total[[6, 8]].sum(axis=1)
+summary["#10 - #12"] = df_total[[10, 12]].sum(axis=1)
+summary["#14 - #32"] = df_total[[14, 16, 20, 25, 28, 32]].sum(axis=1)
+summary["SUMA [kg]"] = summary.sum(axis=1)
 
 
 
-st.table(podsumowanie_zakresy.style.format("{:.2f}"))
+st.table(summary.style.format("{:.2f}"))
 
-lacznie = podsumowanie_zakresy["SUMA [kg]"].sum()
-st.success(f"### WAGA ŁĄCZNA ZAMÓWIENIA: {lacznie:.2f} kg ({lacznie/1000:.3f} t)")
+total_final = summary["SUMA [kg]"].sum()
+st.success(f"### ŁĄCZNA WAGA CAŁOŚCI: {total_final:.2f} kg ({total_final/1000:.3f} t)")
