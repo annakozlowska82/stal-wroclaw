@@ -1,69 +1,52 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
-# Wagi jednostkowe wg Twojego arkusza
-WAGI = {
-    6: 0.222, 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21,
-    16: 1.58, 20: 2.47, 25: 3.85, 28: 4.83, 32: 6.31
-}
+# Konfiguracja wag jednostkowych
+WAGI = {6: 0.222, 8: 0.395, 10: 0.617, 12: 0.888, 14: 1.21, 16: 1.58, 20: 2.47, 25: 3.85, 28: 4.83, 32: 6.31}
+SREDNICE = list(WAGI.keys())
+TYPY = ["Proste", "Gięte", "3D"]
 
-st.set_page_config(page_title="Kalkulator Zbrojenia - Wrocław", layout="wide")
+st.set_page_config(page_title="Zbrojenie Wrocław - Kalkulator", layout="wide")
+st.title("🏗️ System Sumowania Stallist (kg)")
 
-st.title("🏗️ Szybkie Sumowanie Stallist")
+# Inicjalizacja danych w pamięci (6 pustych macierzy)
+if 'macierze' not in st.session_state:
+    st.session_state.macierze = {
+        i: pd.DataFrame(0.0, index=TYPY, columns=SREDNICE) for i in range(1, 7)
+    }
 
-# Inicjalizacja pamięci aplikacji
-if 'listy' not in st.session_state:
-    st.session_state.listy = {i: [] for i in range(1, 7)}
-
-def dodaj_pozycje(nr_listy, sr, t, dl):
+def dodaj_do_macierzy(nr, sr, typ, dl):
     if dl > 0:
-        waga = round(dl * WAGI[sr], 2)
-        nowa_pozycja = {
-            "Średnica [mm]": sr,
-            "Typ": t,
-            "Długość [mb]": round(dl, 2),
-            "Waga [kg]": waga
-        }
-        st.session_state.listy[nr_listy].append(nowa_pozycja)
+        waga_kg = round(dl * WAGI[sr], 2)
+        st.session_state.macierze[nr].at[typ, sr] += waga_kg
 
-total_order_weight = 0
+total_all_kg = 0
 
-# Tworzenie 6 sekcji
+# Generowanie 6 sekcji
 for i in range(1, 7):
-    with st.expander(f"📋 STALLISTA NR {i} (Suma: {sum(d['Waga [kg]'] for d in st.session_state.listy[i]):.2f} kg)", expanded=(i==1)):
+    suma_listy = st.session_state.macierze[i].values.sum()
+    with st.expander(f"📋 STALLISTA NR {i} | Suma: {suma_listy:.2f} kg", expanded=(i==1)):
         
-        # Formularz wprowadzania - Enter automatycznie wysyła formularz
+        # Formularz wprowadzania
         with st.form(key=f"form_{i}", clear_on_submit=True):
-            c1, c2, c3, c4 = st.columns([1, 1, 2, 1])
-            with c1:
-                sr = st.selectbox("Średnica", list(WAGI.keys()), key=f"s_sel_{i}")
-            with c2:
-                typ = st.selectbox("Typ", ["Proste", "Gięte", "3D"], key=f"t_sel_{i}")
-            with c3:
-                # Naciśnięcie ENTER w tym polu doda pozycję do listy
-                dl = st.number_input("Długość [mb] + ENTER", min_value=0.0, step=0.1, format="%.2f", key=f"d_in_{i}")
-            with c4:
-                st.write("") # Odstęp
-                submit = st.form_submit_button("Dodaj ręcznie")
+            col1, col2, col3 = st.columns([1, 1, 2])
+            with col1:
+                sr_input = st.selectbox("Średnica [mm]", SREDNICE, key=f"sr_{i}")
+            with col2:
+                typ_input = st.selectbox("Typ obróbki", TYPY, key=f"typ_{i}")
+            with col3:
+                # WPISZ I NACIŚNIJ ENTER
+                dl_input = st.number_input("Długość [mb] + ENTER", min_value=0.0, step=0.1, format="%.2f", key=f"dl_{i}")
             
-            if submit or (dl > 0):
-                dodaj_pozycje(i, sr, typ, dl)
+            submit = st.form_submit_button("Dodaj do tabeli")
+            if submit or (dl_input > 0):
+                dodaj_do_macierzy(i, sr_input, typ_input, dl_input)
                 st.rerun()
 
-        # Tabela wyników dla danej listy
-        if st.session_state.listy[i]:
-            df = pd.DataFrame(st.session_state.listy[i])
-            st.table(df)
-            if st.button(f"🗑️ Wyczyść listę {i}", key=f"clear_{i}"):
-                st.session_state.listy[i] = []
-                st.rerun()
-            
-            total_order_weight += df["Waga [kg]"].sum()
-
-# --- STOPKA Z PODSUMOWANIEM ---
-st.divider()
-c_total1, c_total2 = st.columns(2)
-with c_total1:
-    st.subheader(f"Waga całkowita: {total_order_weight:.2f} kg")
-with c_total2:
-    st.subheader(f"Waga w tonach: {total_order_weight/1000:.3f} t")
+        # Wyświetlanie tabeli w układzie: Wiersze (Typ) x Kolumny (Średnica)
+        st.write("**Zestawienie wagowe [kg]:**")
+        df_display = st.session_state.macierze[i].copy()
+        
+        # Dodanie kolumny "RAZEM" dla wierszy
+        df_display['RAZEM [kg]'] = df_display.
